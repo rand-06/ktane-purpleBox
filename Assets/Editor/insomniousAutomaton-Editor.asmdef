@@ -1,0 +1,10 @@
+{
+  "name": "insomniousAutomaton-Editor",
+  "references": [
+    "insomniousAutomaton"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": []
+}
