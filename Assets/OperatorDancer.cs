@@ -31,18 +31,18 @@ public static class OperatorDancer //танцор, потому что это е
         return ans;
     }
 
-    public static bool strictXnor(string element1, string element2)
+    public static bool strictXnor(string element1, string element2, int ModuleId)
     {
         if (element1.Length != element2.Length) return false;
         for (int i = 0; i < element1.Length; i++)
         {
             if ((element1[i] == '0' && element2[i] == '1') || (element1[i] == '1' && element2[i] == '0'))
             {
-                Debug.Log("XNORing " + element1 + " and " + element2 + " equals FALSE. Index " + i);
+                Debug.Log("[Insomnious Automaton #"+ ModuleId +"] XNORing " + element1 + " and " + element2 + " equals FALSE. Index " + i);
                 return false;
             }
         }
-        Debug.Log("XNORing " + element1 + " and " + element2 + " equals TRUE.");
+        Debug.Log("[Insomnious Automaton #"+ ModuleId +"] XNORing " + element1 + " and " + element2 + " equals TRUE.");
         return true;
     }
 

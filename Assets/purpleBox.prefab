@@ -704,7 +704,6 @@ GameObject:
   - component: {fileID: 114946871378414058}
   - component: {fileID: 114464905786284784}
   - component: {fileID: 114420476169218198}
-  - component: {fileID: 114685867289629968}
   - component: {fileID: 114699653622075430}
   m_Layer: 0
   m_Name: purpleBox
@@ -3202,17 +3201,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ShaderNames:
   - KT/Mobile/DiffuseTint
---- !u!114 &114685867289629968
-MonoBehaviour:
-  m_ObjectHideFlags: 1
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 100100000}
-  m_GameObject: {fileID: 1988881351703522}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: aab10cc088966b847821097cca14a485, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &114699653622075430
 MonoBehaviour:
   m_ObjectHideFlags: 1

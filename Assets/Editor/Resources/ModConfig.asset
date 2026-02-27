@@ -14,7 +14,11 @@ MonoBehaviour:
   id: insomniousAutomaton
   title: Insomnious Automaton
   author: rand06
-  description: 
+  description: 'Okay, so basically, I wanted to make a module about finite automata
+    but DaComputerNerd was first. However, our ideas were very different, so... I
+    decided to make the module anyway! Though, it may be a bit harder than I''ve expected...
+
+    Thanks to Megum for helping me with this module!'
   version: 
   outputFolder: build
   debugBuild: 1

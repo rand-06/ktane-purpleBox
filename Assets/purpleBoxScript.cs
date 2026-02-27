@@ -94,6 +94,10 @@ public class purpleBoxScript : MonoBehaviour
 	static int ModuleIdCounter;
 	int ModuleId;
 
+	private bool tpAutoSolve = false;
+
+	private string[] TPAnswers = new string[3];
+
 	private int getCharFromSN(int index)
 	{
 		
@@ -421,25 +425,25 @@ public class purpleBoxScript : MonoBehaviour
 		string[] w1Table = new string[1 << (amountsI.Contains(0) ? 4 : 5)];
 		string[] vTable = new string[1 << (amountsI.Contains(0) ? 4 : 5)];
 		string[] flipFlopTable = new string[1 << (amountsI.Contains(0) ? 4 : 5)];
-		
+		string[] binaries2 = {"000","001","010","011","100","101","110","111"};
 		for (int i = 0; i < uTable.Length; i++)
 		{
 			if (amountsI.Contains(0))		//только 2 входа
 			{
 				uTable[i] = binaries[0][i%2];
-				wTable[i] = binaries[2][i/2];
+				wTable[i] = binaries2[i/2];
 			}
 			else				//3 входа.
 			{
 				uTable[i] = binaries[1][i%4];
-				wTable[i] = binaries[2][i/4];
+				wTable[i] = binaries2[i/4];
 			}
 
 			int x = Array.IndexOf(binariesI, uTable[i]), y = Array.IndexOf(binariesString, wTable[i]);
 			if (x == -1 || y == -1 || table[x][y].dest == -1)
 			{
 				w1Table[i] = "***";
-				vTable[i] = stars(vTable[0].Length);
+				vTable[i] = stars(amountsO.Contains(0) ? 1 : 2);
 				flipFlopTable[i] = "******";
 			}
 			else
@@ -499,6 +503,9 @@ public class purpleBoxScript : MonoBehaviour
 		answers[0] = w1Maps[wIndex];
 		answers[1] = vMaps[vIndex];
 		answers[2] = flipFlopMaps[flipFlopIndex];
+		TPAnswers[0] = w1Nor[wIndex];
+		TPAnswers[1] = vNor[vIndex];
+		TPAnswers[2] = flipFlopNor[flipFlopIndex];
 		
 		queries[0] = "w" + wIndex;
 		queries[1] = "v" + vIndex;
@@ -599,7 +606,7 @@ public class purpleBoxScript : MonoBehaviour
 		yield return new WaitForSeconds(2f);
 		if (
 			OperatorDancer.strictXnor(OperatorDancer.norToTruthTable(stackString.Replace('!', '|').Replace('-', '_'),
-				(int)Math.Log(answers[stage].Length, 2)),answers[stage])
+				(int)Math.Log(answers[stage].Length, 2)),answers[stage], ModuleId)
 		)
 		{
 			stage++;
@@ -628,9 +635,9 @@ public class purpleBoxScript : MonoBehaviour
 	{
 		bottomText.transform.localScale = bottomTextScale;
 		Bounds textBounds = bottomText.GetComponent<Renderer>().bounds;
-		if (textBounds.size.x > .12f)
+		if (textBounds.size.x > .10f)
 			bottomText.transform.localScale = new Vector3(
-				bottomTextScale.x * (.12f / textBounds.size.x),
+				bottomTextScale.x * (.10f / textBounds.size.x),
 				bottomTextScale.y,
 				bottomTextScale.z
 			);
@@ -659,6 +666,15 @@ public class purpleBoxScript : MonoBehaviour
 
 	IEnumerator strike()
 	{
+		if (tpAutoSolve)
+		{
+			GetComponent<KMBombModule>().HandlePass();
+			bottomText.GetComponent<TextMesh>().text = "<color=#ff0000>If you see this,\nreport this to rand06 IMMEDIATELY.</color>";
+			topText.GetComponent<TextMesh>().text = "<color=#ff0000>BUG!</color>";
+			ModuleSolved = true;
+			stage = 3;
+			yield break;
+		}
 		Audio.HandlePlaySoundAtTransform(strikeSound.name, transform);
 		GetComponent<KMBombModule>().HandleStrike();
 		boxAwake = true;
@@ -733,9 +749,91 @@ public class purpleBoxScript : MonoBehaviour
 		topSide.OnHighlightEnded += delegate { if (!ModuleSolved) highlightTopBool = false; };
 		status.OnInteract += delegate { if (!ModuleSolved) StartCoroutine(turnOnSprites()); return false; };
 		status.OnInteractEnded += delegate { holdingStatus = false; };
+
+		updateTopScreen();
 	}
 
-	void Update () {
-		
-	}
+	#pragma warning disable 414
+    private readonly string TwitchHelpMessage = @"Use !{0} hover to hover over box' lid. Use !{0} 0/1 to input 0 or 1; you can use spaces, for example !{0} 100 011 101 011 111 011. Use !{0} submit to submit a stage. Use !{0} clear to clear the input. Use !{0} face to toggle additional state indication.";
+#pragma warning restore 414
+
+    IEnumerator ProcessTwitchCommand(string Command)
+    {
+        yield return null;
+        updateTopScreen();
+        if (Command.RegexMatch("^[01 ]+$"))
+        {
+	        foreach (var c in Command)
+		        if (c != ' ')
+		        {
+			        sidePress(c=='1');
+			        yield return new WaitForSeconds(.1f);
+		        }
+	        yield break;
+        }
+
+        if (Command.ToLowerInvariant() == "hover")
+        {
+	        yield return new WaitForSeconds(3f);
+	        boxAwake = false;
+	        updateBottomScreen();
+	        updateFace(1);
+	        yield break;
+        }
+
+        if (Command.ToLowerInvariant() == "submit")
+        {
+	        topSide.OnInteract();
+	        yield break;
+        }
+
+        if (Command.ToLowerInvariant() == "clear")
+        {
+	        bottomSide.OnInteract();
+	        yield break;
+        }
+
+        if (Command.ToLowerInvariant() == "face")
+        {
+	        yield return new WaitForSeconds(3f);
+	        spritesTurnedOn = !spritesTurnedOn;
+	        updateFace();
+	        yield break;
+        }
+
+        yield return "sendtochaterror Command is not valid.";
+    }
+
+    IEnumerator TwitchHandleForcedSolve()
+    {
+        yield return null;
+        tpAutoSolve = true;
+        yield return ProcessTwitchCommand("hover");
+        bottomSide.OnInteract();
+        while (stage<3)
+        {
+	        string bitAnswer = "";
+	        foreach (var c in TPAnswers[stage])
+	        {
+		        switch (c)
+		        {
+			        case '0': bitAnswer += "100"; break;
+			        case '1': bitAnswer += "101"; break;
+			        case '2': bitAnswer += "110"; break;
+			        case '3': bitAnswer += "000"; break;
+			        case '4': bitAnswer += "001"; break;
+			        case '_': bitAnswer += "011"; break;
+			        case '|': bitAnswer += "111"; break;
+		        }
+	        }
+
+	        foreach (var c in bitAnswer)
+	        {
+		        sidePress(c=='1');
+		        yield return new WaitForSeconds(.1f);
+	        }
+			yield return topPress();
+	        //while (lockInput) yield return new WaitForSeconds(.5f);
+        }
+    }
 }
