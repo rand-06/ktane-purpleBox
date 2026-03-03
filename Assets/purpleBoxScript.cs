@@ -139,6 +139,12 @@ public class purpleBoxScript : MonoBehaviour
 
 	string flipFlop(string wt, string wt1, char type)
 	{
+		return Enumerable.Range(0,wt.Length).Select(i => {
+			if (new[]{"01R","11R","00S","10S","00J","11K"}.Contains("" + wt[i] + wt1[i] + type)) return '0';
+			if (new[]{"10R","01S","01J","10K"}.Contains("" + wt[i] + wt1[i] + type)) return '1';
+			return '*';
+		}.toString()).Aggregate((a,b) => a+b);
+		
 		string ans = "";
 		for (int i = 0; i < wt.Length; i++)
 		{
