@@ -1,100 +1,49 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 public static class MapBruteforcer
 {
-    public static int checkGroup(string map, string group)
+	private static List<int> getValidDigitsForGroup(int lengthOfMap, string group)
 	{
-		int xormask = 0, andmask = 0;
-		for (int i = 0; i < group.Length; i++)
-		{
-			xormask <<= 1;
-			andmask <<= 1;
-			if (group[i]=='1') xormask++;
-			if (group[i]!='*') andmask++;
-		}
-
-		int ans = 0;
-		for (int i = 0; i < map.Length; i++)
-		{
-			if (((i ^ xormask) & andmask) == 0)
-			{
-				if (map[i] == '0') return 0;
-				if (map[i] == '1') ans++;
-			}
-		}
-		return ans;
+		int xorMask = group.Select(t => t=='1'?1:0).Aggregate(0, (total, next) => 2 * total + next);
+		int andMask = group.Select(t => t!='*'?1:0).Aggregate(0, (total, next) => 2 * total + next);
+		return Enumerable.Range(0, lengthOfMap).Where(i => ((i ^ xorMask) & andMask) == 0).ToList();
 	}
 	
-	public static string discardGroup(string map, string group)
+	private static int checkGroup(string map, string group) // If group is valid, counts 1s. Else returns 0.
 	{
-		int xormask = 0, andmask = 0;
-		for (int i = 0; i < group.Length; i++)
-		{
-			xormask <<= 1;
-			andmask <<= 1;
-			if (group[i]=='1') xormask++;
-			if (group[i]!='*') andmask++;
-		}
-		char[] ans = map.ToCharArray();
-		for (int i = 0; i < map.Length; i++) if (((i ^ xormask) & andmask) == 0 && map[i] == '1') ans[i] = '*';
-		StringBuilder str = new StringBuilder();
-		foreach (char c in ans)  str.Append(c);
-		return str.ToString();
+		List<int> validDigits = getValidDigitsForGroup(map.Length, group);
+		return validDigits.Any(i => map[i] == '0') ? 0 : validDigits.Count(i=>map[i]=='1');
 	}
 
-	public static int countOnesInMap(string map)
-	{
-		int ans = 0;
-		for (int i = 0; i < map.Length; i++) if (map[i] == '1') ans++;
-		return ans;
-	}
+	private static string discardGroup(this string map, string group) => map.ToCharArray().Select((n, j) => 
+		getValidDigitsForGroup(map.Length, group).Where(i => map[i] == '1').ToList().Contains(j) ? '*' : n).Aggregate("", (a, b) => a + b);
 
-	public static int countStarsInGroup(string group)
+	private static string convertNumberToGroup(int number, int length)
 	{
-		int ans = 0;
-		for (int i = 0; i < group.Length; i++) if (group[i] == '*') ans++;
-		return ans;
-	}
-
-	public static string convertNumberToGroup(int number, int length)
-	{
-		string ans = "";
+		List<int> digits = new List<int>();
 		for (int i = 0; i < length; i++)
 		{
-			int z = number % 3;
+			digits.Add(number % 3);
 			number /= 3;
-			switch (z)
-			{
-				case 0: ans = '0' + ans; break;
-				case 1: ans = '*' + ans; break;
-				case 2: ans = '1' + ans; break;
-				default: return "";
-			}
 		}
-		return ans;
+		return digits.Select(i=>i==0?'0':i==1?'*':'1').Aggregate("", (a,b) => b + a);
 	}
 	
 	public static string bruteForceMap(string map) // Gives a nearly optimized answer for map of any correct size. May take long time to process.
 	{
 		string mapCopy = string.Copy(map);
 		List<string> ans = new List<string>();
-		int length3 = (int)Math.Round(Math.Pow(3, Math.Log(map.Length, 2)), MidpointRounding.AwayFromZero);
-		int log = (int)Math.Round(Math.Log(map.Length, 2), MidpointRounding.AwayFromZero);
-		while (countOnesInMap(mapCopy) > 0)
+		int varCount = 0, possibilities = 1;
+		for (int i = map.Length; i > 1; i >>= 1) { varCount++; possibilities *= 3; }
+		while (mapCopy.Any(x=>x=='1'))
 		{
-			int[] bruteForcePoints = new int[length3];
-			for (int i = 0; i < length3; i++)
-			{
-				string group = convertNumberToGroup(i, log);
-				bruteForcePoints[i] = checkGroup(mapCopy, group)*(log+1) + countStarsInGroup(group);
-				//bruteForcePoints[i] = checkGroup(mapCopy, group)*(log+1) + group.Count(a => a=='*');
-			}
-			string maxGroup = convertNumberToGroup(bruteForcePoints.IndexOf(a => a == bruteForcePoints.Max()), log);
-			ans.Add(maxGroup);
-			mapCopy = discardGroup(mapCopy,maxGroup);
+			int[] points = Enumerable.Range(0, possibilities)
+				.Select(i => convertNumberToGroup(i, varCount))
+				.Select(group => checkGroup(mapCopy, group) * (varCount + 1) + group.Count(a => a == '*')).ToArray();
+			string maxGroup = convertNumberToGroup(points.IndexOf(a => a == points.Max()), varCount); // Gets a group with best score.
+			ans.Add(maxGroup); // Adds it to answer.
+			mapCopy = mapCopy.discardGroup(maxGroup); // And discards it from map.
 		}
 		return string.Join("+", ans.ToArray());
 	}

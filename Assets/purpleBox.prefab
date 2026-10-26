@@ -3225,15 +3225,6 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 48ba1e42cad3d21488f427dc70c04d1a, type: 2}
   - {fileID: 2100000, guid: 6485d6e9ee0a59e49a6080d94041f8b4, type: 2}
   purpleBox: {fileID: 23087642205395042}
-  skillCheck: {fileID: 8300000, guid: e2a7a24dd5cf13d4ea57fd7e9e69945e, type: 3}
-  ModuleSolved: 0
-  sprites:
-  - {fileID: 21300000, guid: 58819f3398c920845a278df82a0badbb, type: 3}
-  - {fileID: 21300000, guid: ad210264af2580943a3c2269b59c2b70, type: 3}
-  - {fileID: 21300000, guid: 06c2c98dce5fe6440b825ac53fe0277c, type: 3}
-  - {fileID: 21300000, guid: e9fc99a83cdb6a94893954cdd0d53bcf, type: 3}
-  status: {fileID: 114916881228025948}
-  face: {fileID: 212414749414403284}
   notes:
   - {fileID: 8300000, guid: 910ce52661ff5bc49bb01c97fbe77a1e, type: 3}
   - {fileID: 8300000, guid: e5631764cdfac6d4e8aeda63e009d0c1, type: 3}
@@ -3242,12 +3233,20 @@ MonoBehaviour:
   - {fileID: 8300000, guid: b1fdce06c3b62354b89df0791a611263, type: 3}
   - {fileID: 8300000, guid: b099ad5f251a5f44d8cc0fd31c972c00, type: 3}
   - {fileID: 8300000, guid: dbd15d3cabbe71c4b83ec0ab0cd4231b, type: 3}
-  strikeSound: {fileID: 8300000, guid: bafc19f8f3555044f86637ca9918437d, type: 3}
   tapSounds:
   - {fileID: 8300000, guid: de82e45f9f718b34e847f21f9112859c, type: 3}
   - {fileID: 8300000, guid: 8c93d7bfa7042b24c95d020c32ec9513, type: 3}
   - {fileID: 8300000, guid: 96b1dc6b2e2eca84a8f38956bc7816af, type: 3}
+  strikeSound: {fileID: 8300000, guid: bafc19f8f3555044f86637ca9918437d, type: 3}
   solveSound: {fileID: 8300000, guid: 993832958938fe34ab9c311feaa67ace, type: 3}
+  sprites:
+  - {fileID: 21300000, guid: 58819f3398c920845a278df82a0badbb, type: 3}
+  - {fileID: 21300000, guid: ad210264af2580943a3c2269b59c2b70, type: 3}
+  - {fileID: 21300000, guid: 06c2c98dce5fe6440b825ac53fe0277c, type: 3}
+  - {fileID: 21300000, guid: e9fc99a83cdb6a94893954cdd0d53bcf, type: 3}
+  status: {fileID: 114916881228025948}
+  face: {fileID: 212414749414403284}
+  ModuleSolved: 0
 --- !u!114 &114724335886154950
 MonoBehaviour:
   m_ObjectHideFlags: 1

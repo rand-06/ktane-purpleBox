@@ -2,18 +2,21 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using KModkit;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class Connection
 {
+	public int origin;
 	public int dest;
 	public int input;
 	public int output;
 
-	public Connection(int dest = -1, int input = -1, int output = -1)
+	public Connection(int origin = -1, int dest = -1, int input = -1, int output = -1)
 	{
+		this.origin = origin;
 		this.dest = dest;
 		this.input = input;
 		this.output = output;
@@ -24,18 +27,12 @@ public class Cell
 {
 	public int dest;
 	public int output;
-	public Cell(int dest, int output)
+	public Cell(int dest = -1, int output = -1)
 	{
 		this.dest = dest;
 		this.output = output;
 	}
-
-	public Cell()
-	{
-		dest = -1;
-		output = -1;
-	}
-
+	
 	public Cell(Connection connection)
 	{
 		dest = connection.dest;
@@ -48,70 +45,67 @@ public class purpleBoxScript : MonoBehaviour
 
 	public KMBombInfo Info;
 	public KMAudio Audio;
-	
-	public KMSelectable topSide;
-	public KMSelectable bottomSide;
-	public KMSelectable leftSide;
-	public KMSelectable rightSide;
-	public KMSelectable frontSide;
-	
-	public GameObject topText;
-	public GameObject bottomText;
+
+	public KMSelectable topSide, bottomSide, leftSide, rightSide, frontSide;
+
+	public GameObject topText, bottomText;
 	public Material[] materials;
 	public MeshRenderer purpleBox;
-	private bool RS;
-	public AudioClip skillCheck;
 
-	private string stackString = "";
-	private string bitString = "";
+	public List<AudioClip> notes;
+	public List<AudioClip> tapSounds;
+	public AudioClip strikeSound;
+	public AudioClip solveSound;
+
+	public Sprite[] sprites; // 0 - awake, 1 - ready, 2 - submit, 3 - solved.
+	public KMSelectable status;
+	public SpriteRenderer face;
+	
+	public bool ModuleSolved = false;
+
+	private bool RS;
+
+	private string stackString = "", bitString = "";
 	private int timer = 0;
 
 	private string[] answers = new string[3];
 	private string[] queries = new string[3];
 	private int stage = 0;
-	
-	public bool ModuleSolved = false;
+
 	private bool boxAwake = true;
-	
-	public Sprite[] sprites; // 0 - awake, 1 - ready, 2 - submit, 3 - solved.
+
 	private int spriteId = 0;
 	private bool spritesTurnedOn = false;
-	
-	public KMSelectable status;
-	public SpriteRenderer face;
 
-	public AudioClip[] notes;
-	public AudioClip strikeSound;
-	public AudioClip[] tapSounds;
-	public AudioClip solveSound;
 	private bool lockInput = false;
 	private bool highlightTopBool = false;
 	private bool holdingStatus = false;
 	private Vector3 bottomTextScale;
-
 	private string SN;
 	
 	static int ModuleIdCounter;
 	int ModuleId;
-
 	private bool tpAutoSolve = false;
-
 	private string[] TPAnswers = new string[3];
+	private bool TwitchPlaysActive, TwitchShouldSolve;
+
+	private readonly Dictionary<char, string> conversion = new Dictionary<char, string>
+	{
+		{ '0', "100" }, { '1', "101" }, { '2', "110" }, { '3', "000" }, { '4', "001" }, { '_', "011" }, { '|', "111" }
+	};
 
 	private int getCharFromSN(int index)
 	{
-		
-		string base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 		switch (index - 1)
 		{
-			case 0: case 1: return base36.IndexOf(SN[index-1]);
+			case 0: case 1: return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".IndexOf(SN[index-1]);
 			case 2: case 5: return SN[index-1] - '0';
 			case 3: case 4: return SN[index-1] - 'A' + 1;
 			default: return -1;
 		}
 	}
 
-	int[] reverseDescSort(int[] arr)
+	int[] inverseDescSort(int[] arr)
 	{
 		string ans = "Usages: ";
 		for (int i=0; i<arr.Length; i++) ans += i + ": " + arr[i]+"; ";
@@ -123,91 +117,19 @@ public class purpleBoxScript : MonoBehaviour
 		return indices;
 	}
 
-	string[] transpose(string[] matrix)
-	{
-		if (matrix.Length == 0) return new string[0];
-		string[] ans = new string[matrix[0].Length];
-		for (int i = 0; i < matrix[0].Length; i++)
-		{
-			for (int j = 0; j < matrix.Length; j++)
-			{
-				ans[i] += matrix[j][i];
-			}
-		}
-		return ans;
-	}
+	string[] transpose(string[] matrix) => (matrix.Length == 0)? new string[0]: 
+		Enumerable.Range(0,matrix[0].Length).Select(i => 
+			Enumerable.Range(0,matrix.Length).Select(j => matrix[j][i]).Aggregate("",(a,b)=>a+b)).ToArray();
 
-	string flipFlop(string wt, string wt1, char type)
-	{
-		return Enumerable.Range(0,wt.Length).Select(i => {
+	string flipFlop(string wt, string wt1, char type) => Enumerable.Range(0,wt.Length).Select(i => {
 			if (new[]{"01R","11R","00S","10S","00J","11K"}.Contains("" + wt[i] + wt1[i] + type)) return '0';
 			if (new[]{"10R","01S","01J","10K"}.Contains("" + wt[i] + wt1[i] + type)) return '1';
 			return '*';
-		}.toString()).Aggregate((a,b) => a+b);
-		
-		string ans = "";
-		for (int i = 0; i < wt.Length; i++)
-		{
-			switch ("" + wt[i] + wt1[i] + type)
-			{
-				case "01R":
-				case "11R":
-				case "00S":
-				case "10S":
-				case "00J":
-				case "11K": ans += '0'; break;
+		}).Aggregate("",(a,b) => a+b);
 
-				case "10R":
-				case "01S":
-				case "01J":
-				case "10K": ans += '1'; break;
-				
-				default: ans += '*'; break;
-			}
-		}
-		return ans;
-	}
-
-	string stars(int length)
-	{
-		string ans = "";
-		for (int i = 0; i < length; i++) ans += "*";
-		return ans;
-	}
-
-	string karnaughify(string s)
-	{
-		int[] indices;
-		switch (s.Length)
-		{
-			case 32: indices = new[]
-			{
-				0, 4, 12, 8, 24, 28, 20, 16,
-				1, 5, 13, 9, 25, 29, 21, 17,
-				3, 7, 15, 11, 27, 31, 23, 19,
-				2, 6, 14, 10, 26, 30, 22, 18
-			}; break;
-			case 16: indices = new[]
-			{
-				0, 4, 12, 8, 
-				1, 5, 13, 9, 
-				3, 7, 15, 11,
-				2, 6, 14, 10
-			}; break;
-			case 8: indices = new[]
-			{
-				0, 2, 6, 4, 
-				1, 3, 7, 5
-			}; break;
-			default: indices = new int[0]; break;
-		}
-
-		string ans = "";
-		foreach (int i in indices) ans += s[i];
-		return ans;
-	}
-
-	void logTable(Cell[][] cells, List<string[]> wu, List<string[]> truth)
+	string stars(int length) => Enumerable.Range(0,length).Aggregate("",(a,_) => a+'*');
+	
+	void logTable(Cell[][] cells, List<string[]> wu, List<string[]> truth, int wIndex, int vIndex, int fIndex)
 	{
 		// QX-table logging.
 		string ans = cells[0].Length==6?"x\\q|-0-|-1-|-2-|-3-|-4-|-5-\n":"x\\q|-0-|-1-|-2-|-3-|-4-\n";
@@ -230,6 +152,7 @@ public class purpleBoxScript : MonoBehaviour
 		ans += '\n';
 		for (int i = 0; i < cells.Length; i++)
 		{
+			if (wu[1][i]=="*") continue;
 			ans += " " + wu[1][i];
 			for (int j = 0; j < cells[i].Length; j++)
 				ans += "|" + (cells[i][j].dest == -1 ? (wu[2][0].Length==1?"***:*":"***:**") : wu[0][cells[i][j].dest] + ":" + wu[2][cells[i][j].output]);
@@ -238,17 +161,10 @@ public class purpleBoxScript : MonoBehaviour
 		Debug.LogFormat("[Insomnious Automaton #{0}] {1}", ModuleId, ans.Replace("\n","\n[Insomnious Automaton #" + ModuleId +"] "));
 		
 		//Truth table logging.
-		ans = "u + w(t) = w(t+1) : v -> "+(RS?"RS":"JK")+". Truth table:\n";
-		for (int i = 0; i < truth[0].Length; i++)
-		{
-			ans+=truth[0][i]+"+"+truth[1][i]+" = "+truth[2][i]+":"+truth[3][i]+" -> "+
-			     truth[4][i][0]+truth[4][i][3]+" "+
-			     truth[4][i][1]+truth[4][i][4]+" "+
-			     truth[4][i][2]+truth[4][i][5]+"\n";
-		}
-		Debug.LogFormat("[Insomnious Automaton #{0}] {1}", ModuleId, ans.Replace("\n","\n[Insomnious Automaton #" + ModuleId +"] "));
-		
-		
+		Debug.LogFormat("[Insomnious Automaton #{0}] u + w(t) = w(t+1) : v -> {1}. Truth table:", ModuleId, (RS?"RS":"JK"));
+		for (int i = 0; i < truth[0].Length; i++) 
+			Debug.LogFormat("[Insomnious Automaton #{0}] {1}+{2} = {3}:{4} -> {5}", ModuleId,
+				truth[0][i],truth[1][i],truth[2][i][wIndex],truth[3][i][vIndex],truth[4][i][fIndex]);
 	}
 
 	int keepInRange(int num)
@@ -258,30 +174,14 @@ public class purpleBoxScript : MonoBehaviour
 		return num;
 	}
 
-	int[] toTernary(int num)
-	{
-		if (num > 26 || num < 0) return new int[0];
-		return new[]{num/9, num/3%3, num%3};
-	}
+	int[] toTernary(int num) => new[]{num/9%3, num/3%3, num%3};
 
-	int floor(decimal num)
-	{
-		return (int)num;
-	}
-
-	int ceil(decimal num)
-	{
-		if (num != (int)num) return (int)num + 1;
-		return (int)num;
-	}
+	int floor(decimal num) =>(int)num;
+	int ceil(decimal num) => (int)num + ((num != (int)num)?1:0);
 	
-	int round(decimal num)
-	{
-		decimal nonInt = num - (int)num;
-		if (nonInt < 0.5M) return floor(num); return ceil(num);
-	}
+	int round(decimal num) => (num - (int)num) < 0.5M ? floor(num) : ceil(num);
 	
-	int z(int f, int i)
+	int z(int f, int i) // consider optimized 
 	{
 		int SN2 = getCharFromSN(2), SN3 = getCharFromSN(3), SN6 = getCharFromSN(6);
 		int B = Info.GetBatteryCount(), BH = Info.GetBatteryHolderCount();
@@ -346,116 +246,107 @@ public class purpleBoxScript : MonoBehaviour
 			
 			default: return int.MinValue;
 		}
-
 		return keepInRange(ans);
+	}
+
+	string toBinary(string val)
+	{
+		if (val == "TRUE") return "1";
+		if (val == "FALSE") return "0";
+		return val.ToCharArray().Select(c => conversion[c]).Aggregate((a, b) => a + b);
 	}
 	
 	void fromSNtoSmth()
 	{
-		int amountOfNodes = getCharFromSN(1) % 2 == 0 ? 6 : 5;
-		
+		int amountOfQ = getCharFromSN(1) % 2 == 0 ? 6 : 5;
 		List<List<Connection>> nodes = new List<List<Connection>>();
-		for (int i = 0; i < amountOfNodes; i++)
+		for (int i = 0; i < amountOfQ; i++)
 		{
 			nodes.Add(new List<Connection>());
+			int z0 = z(0, i), z1 = z(1, i), z2 = z(2, i);
+			if (0 <= i + z0 && i + z0 < amountOfQ)
+				nodes[i].Add(new Connection(i,i + z0, 0, i < i + z0 ? 0 : i > i + z0 ? 1 : 2));
+			if (0 <= i + z1 && i + z1 < amountOfQ)
+				nodes[i].Add(new Connection(i,i + z1, 1, i < i + z1 ? 0 : i > i + z1 ? 1 : 2));
+			if (Math.Abs(i + z2) < amountOfQ)
+				nodes[i].Add(new Connection(i,Math.Abs(i + z2), 2,
+					i < Math.Abs(i + z2) ? 0 : i > Math.Abs(i + z2) ? 1 : 2));
 		}
 
-		for (int i = 0; i < amountOfNodes; i++)
-		{
-			int z0 = z(0, i),  z1 = z(1, i), z2 = z(2, i);
-			if (0<=i+z0 && i+z0<amountOfNodes)
-				nodes[i].Add(new Connection(i+z0, 0, i<i+z0?0:i>i+z0?1:2));
-			if (0<=i+z1 && i+z1<amountOfNodes)
-				nodes[i].Add(new Connection(i+z1, 1, i<i+z1?0:i>i+z1?1:2));
-			if (Math.Abs(i+z2)<amountOfNodes)
-				nodes[i].Add(new Connection(Math.Abs(i+z2), 2, i<Math.Abs(i+z2)?0:i>Math.Abs(i+z2)?1:2));
-		}
-		
-		int[] amountsNodes = new int[amountOfNodes];	//количества использований по номерам нод
-		int[] amountsI = new int[3];
-		int[] amountsO = new int[3];
+		int[] amountsForEachQ = new int[amountOfQ]; //количества использований по номерам нод
+		int[] amountsForEachX = new int[3];
+		int[] amountsForEachY = new int[3];
+		int[] amountsForEachW = new int[amountOfQ];
 		foreach (List<Connection> node in nodes)
+		foreach (Connection connection in node)
 		{
-			foreach (Connection c in node)
-			{
-				amountsNodes[c.dest]++;
-				amountsI[c.input]++;
-				amountsO[c.output]++;
-			}
+			amountsForEachW[connection.origin]++;
+			amountsForEachQ[connection.dest]++;
+			amountsForEachX[connection.input]++;
+			amountsForEachY[connection.output]++;
 		}
-		
-		int[] indexNodes = reverseDescSort(amountsNodes);	//номера нод отсортированные по убыванию
-		int[] indexI = reverseDescSort(amountsI);
-		int[] indexO = reverseDescSort(amountsO);
+
+		int[] indicesOfSortedQ = inverseDescSort(amountsForEachQ); //номера нод отсортированные по убыванию
+		int[] indicesOfSortedX = inverseDescSort(amountsForEachX);
+		int[] indicesOfSortedY = inverseDescSort(amountsForEachY);
 		List<List<string>> binaries = new List<List<string>>
 		{
 			new List<string> { "0", "1" },
 			new List<string> { "00", "01", "10", "11" },
 			new List<string> { "000", "001", "010", "100", "011", "101", "110", "111" }
 		};
-		
-		string[] binariesString = new string[amountOfNodes];			//ноды по порядку (0,1,2...), переведенные в бинарки
-		string[] binariesI = new string[3];
-		string[] binariesO = new string[3];
 
-		for (int i = 0; i < amountOfNodes; i++)
-		{
-			binariesString[indexNodes[i]] = binaries[2][i];
-		}
+		string[] binariesQ = new string[amountOfQ]; //ноды по порядку (0,1,2...), переведенные в бинарки
+		string[] binariesX = new string[3];
+		string[] binariesY = new string[3];
+		int realQAmount = Enumerable.Range(0, amountOfQ).Count(i => amountsForEachQ[i] != 0 || amountsForEachW[i] != 0);
+		int realXAmount = amountsForEachX.Count(i => i != 0);
+		int realYAmount = amountsForEachY.Count(i => i != 0);
+		int lengthQ = realQAmount <= 2 ? 1 : realQAmount <= 4 ? 2 : 3;
+		int lengthX = realXAmount <= 2 ? 1 : 2;
+		int lengthY = realYAmount <= 2 ? 1 : 2;
+		Enumerable.Range(0, amountOfQ).ToList().ForEach(i =>
+			binariesQ[indicesOfSortedQ[i]] = (i < realQAmount) ? binaries[lengthQ - 1][i] : stars(lengthQ));
+		Enumerable.Range(0, 3).ToList().ForEach(i =>
+			binariesX[indicesOfSortedX[i]] = (i < realXAmount) ? binaries[lengthX - 1][i] : stars(lengthX));
+		Enumerable.Range(0, 3).ToList().ForEach(i =>
+			binariesY[indicesOfSortedY[i]] = (i < realYAmount) ? binaries[lengthY - 1][i] : stars(lengthY));
 
-		for (int i = 0; i < binariesI.Length; i++)
-		{
-			binariesI[indexI[i]] = (i>=binaries[amountsI.Contains(0) ? 0 : 1].Count)?"*":binaries[amountsI.Contains(0) ? 0 : 1][i];
-		}
-		for (int i = 0; i < binariesO.Length; i++)
-		{
-			binariesO[indexO[i]] = (i>=binaries[amountsO.Contains(0) ? 0 : 1].Count)?"*":binaries[amountsO.Contains(0) ? 0 : 1][i];
-		}
-
-		Cell[][] table = new Cell[binariesI.Length][];
-		for (int i = 0; i < binariesI.Length; i++)
-		{
-			table[i] = new Cell[amountOfNodes];
-			for (int j = 0; j < amountOfNodes; j++) table[i][j] = new Cell();
-		}
-
-		for (int i = 0; i < amountOfNodes; i++)
-		{
+		Cell[][] table = Enumerable.Range(0, binariesX.Length).Select(_ =>
+			Enumerable.Range(0, amountOfQ).Select(__ => new Cell()).ToArray()
+		).ToArray();
+		for (int i = 0; i < amountOfQ; i++)
 			for (int j = 0; j < nodes[i].Count; j++)
-			{
 				table[nodes[i][j].input][i] = new Cell(nodes[i][j]);
-			}
-		}
-		string[] uTable = new string[1 << (amountsI.Contains(0) ? 4 : 5)];
-		string[] wTable = new string[1 << (amountsI.Contains(0) ? 4 : 5)];
-		string[] w1Table = new string[1 << (amountsI.Contains(0) ? 4 : 5)];
-		string[] vTable = new string[1 << (amountsI.Contains(0) ? 4 : 5)];
-		string[] flipFlopTable = new string[1 << (amountsI.Contains(0) ? 4 : 5)];
-		string[] binaries2 = {"000","001","010","011","100","101","110","111"};
-		for (int i = 0; i < uTable.Length; i++)
+		
+		string[] uTable = new string[1 << (lengthX+lengthQ)];
+		string[] wTable = new string[1 << (lengthX+lengthQ)];
+		string[] w1Table = new string[1 << (lengthX+lengthQ)];
+		string[] vTable = new string[1 << (lengthX+lengthQ)];
+		string[] flipFlopTable = new string[1 << (lengthX+lengthQ)];
+		List<List<string>> binaries2 = new List<List<string>>
 		{
-			if (amountsI.Contains(0))		//только 2 входа
-			{
-				uTable[i] = binaries[0][i%2];
-				wTable[i] = binaries2[i/2];
-			}
-			else				//3 входа.
-			{
-				uTable[i] = binaries[1][i%4];
-				wTable[i] = binaries2[i/4];
-			}
-
-			int x = Array.IndexOf(binariesI, uTable[i]), y = Array.IndexOf(binariesString, wTable[i]);
+			new List<string> { "0", "1" },
+			new List<string> { "00", "01", "10", "11" },
+			new List<string> { "000", "001", "010", "011", "100", "101", "110", "111" }
+		};
+		print("lengthX = "+lengthX+"; lengthQ = "+lengthQ+"; realXAmount = "+realXAmount+"; realQAmount = "+realQAmount);
+		for (int i = 0; i < 1 << (lengthX+lengthQ); i++)
+		{
+			uTable[i] = binaries2[lengthX-1][i%(1 << lengthX)];
+			wTable[i] = binaries2[lengthQ-1][i/(1 << lengthX)];
+			print("i = "+i+"; u= "+uTable[i]+"; w="+wTable[i]);
+			int x = Array.IndexOf(binariesX, uTable[i]), y = Array.IndexOf(binariesQ, wTable[i]);
 			if (x == -1 || y == -1 || table[x][y].dest == -1)
 			{
-				w1Table[i] = "***";
-				vTable[i] = stars(amountsO.Contains(0) ? 1 : 2);
-				flipFlopTable[i] = "******";
+				w1Table[i] = stars(lengthQ);
+				vTable[i] = stars(lengthY);
+				flipFlopTable[i] = stars(6);
 			}
 			else
 			{
-				w1Table[i] = binariesString[table[x][y].dest];
-				vTable[i] = binariesO[table[x][y].output];
+				w1Table[i] = binariesQ[table[x][y].dest];
+				vTable[i] = binariesY[table[x][y].output];
 				flipFlopTable[i] = flipFlop(wTable[i], w1Table[i], RS ? 'R' : 'J') +
 				                   flipFlop(wTable[i], w1Table[i], RS ? 'S' : 'K');
 			}
@@ -471,40 +362,17 @@ public class purpleBoxScript : MonoBehaviour
 		string[] w1Nor = Array.ConvertAll(w1Equations,OperatorDancer.convertEquToNor);
 		string[] vNor = Array.ConvertAll(vEquations,OperatorDancer.convertEquToNor);
 		string[] flipFlopNor = Array.ConvertAll(flipFlopEquations,OperatorDancer.convertEquToNor);
+		for (int i = 0; i < lengthQ; i++) 
+			Debug.LogFormat("[Insomnious Automaton #{0}] w{1}(t+1): {2} is equal to {3} ({4})", ModuleId, i, w1Equations[i], w1Nor[i], toBinary(w1Nor[i]));
+		for (int i = 0; i < lengthY; i++)
+			Debug.LogFormat("[Insomnious Automaton #{0}] v{1}: {2} is equal to {3} ({4})", ModuleId, i, vEquations[i], vNor[i], toBinary(vNor[i]));
+		for (int i = 0; i < lengthQ*2; i++)
+			Debug.LogFormat("[Insomnious Automaton #{0}] {1}{2}: {3} is equal to {4} ({5})", ModuleId,
+				i >= lengthQ ? (RS ? "S" : "K") : (RS ? "R" : "J"), i%lengthQ, flipFlopEquations[i], flipFlopNor[i], toBinary(flipFlopNor[i]));
 		
-		Debug.LogFormat(@"[Insomnious Automaton #{24}] w0(t+1): {0} is equal to {1}
-[Insomnious Automaton #{24}] w1(t+1): {2} is equal to {3}
-[Insomnious Automaton #{24}] w2(t+1): {4} is equal to {5}
-[Insomnious Automaton #{24}] 
-[Insomnious Automaton #{24}] v0: {6} is equal to {7}
-[Insomnious Automaton #{24}] v1: {8} is equal to {9}
-[Insomnious Automaton #{24}] 
-[Insomnious Automaton #{24}] {10}0: {11} is equal to {12}
-[Insomnious Automaton #{24}] {13}0: {14} is equal to {15}
-[Insomnious Automaton #{24}] {10}1: {16} is equal to {17}
-[Insomnious Automaton #{24}] {13}1: {18} is equal to {19}
-[Insomnious Automaton #{24}] {10}2: {20} is equal to {21}
-[Insomnious Automaton #{24}] {13}2: {22} is equal to {23}", 
-			w1Equations[0], w1Nor[0],
-			w1Equations[1], w1Nor[1],
-			w1Equations[2], w1Nor[2],
-			vEquations[0], vNor[0],
-			vEquations.Length>1?vEquations[1]:"-", vEquations.Length>1?vNor[1]:"-",
-			RS?"R":"J",
-			flipFlopEquations[0], flipFlopNor[0],
-			RS?"S":"K",
-			flipFlopEquations[3], flipFlopNor[3],
-			flipFlopEquations[1], flipFlopNor[1],
-			flipFlopEquations[4], flipFlopNor[4],
-			flipFlopEquations[2], flipFlopNor[2],
-			flipFlopEquations[5], flipFlopNor[5], ModuleId
-			);
-			
-			
-		
-		int wIndex = Random.Range(0, w1Equations.Length);
-		int vIndex = Random.Range(0, vEquations.Length);
-		int flipFlopIndex = Random.Range(0, flipFlopMaps.Length);
+		int wIndex = Random.Range(0, lengthQ);
+		int vIndex = Random.Range(0, lengthY);
+		int flipFlopIndex = Random.Range(0, lengthQ*2);
 		
 		answers[0] = w1Maps[wIndex];
 		answers[1] = vMaps[vIndex];
@@ -520,10 +388,10 @@ public class purpleBoxScript : MonoBehaviour
 		updateBottomScreen();
 		logTable(
 			table, 
-			new List<string[]>{binariesString, binariesI, binariesO},
-			new List<string[]>{uTable,wTable,w1Table,vTable,flipFlopTable}
+			new List<string[]>{binariesQ, binariesX, binariesY},
+			new List<string[]>{uTable,wTable,w1Table,vTable,flipFlopTable},
+			wIndex,vIndex,flipFlopIndex
 			);
-		
 	}
 
 	void updateTopScreen()
@@ -538,7 +406,6 @@ public class purpleBoxScript : MonoBehaviour
 		}
 	}
 	
-	
 	void checkBits()
 	{
 		if (bitString.Length == 3)
@@ -547,7 +414,6 @@ public class purpleBoxScript : MonoBehaviour
 			{
 				case "000": stackString += '3'; break;
 				case "001": stackString += '4'; break;
-				//case "010": Audio.HandlePlaySoundAtTransform(skillCheck.name, transform); break;
 				case "011": stackString += '-'; break;
 				case "100": stackString += '0'; break;
 				case "101": stackString += '1'; break;
@@ -559,23 +425,20 @@ public class purpleBoxScript : MonoBehaviour
 		updateBottomScreen();		
 	}
 
-	IEnumerator solve()
+	void solve()
 	{
 		updateFace(3);
 		Audio.HandlePlaySoundAtTransform(solveSound.name, transform);
 		ModuleSolved = true;
 		bottomText.GetComponent<TextMesh>().text = "Asleep.";
-		GetComponent<KMBombModule>().HandlePass();
-		yield return null;
+		if (TwitchPlaysActive) TwitchShouldSolve = true;
+		else GetComponent<KMBombModule>().HandlePass();
 	}
 
 	void updateBottomScreen()
 	{
 		if (boxAwake) bottomText.GetComponent<TextMesh>().text = "Awake.";
-		else if (stackString == "" && bitString == "")
-		{
-			bottomText.GetComponent<TextMesh>().text = "Ready.";
-		}
+		else if (stackString == "" && bitString == "") bottomText.GetComponent<TextMesh>().text = "Ready.";
 		else bottomText.GetComponent<TextMesh>().text = stackString+"\n"+bitString;
 		changeScale();
 	}
@@ -595,7 +458,7 @@ public class purpleBoxScript : MonoBehaviour
 				StartCoroutine(strike());
 			}
 			updateBottomScreen();
-			if (stage == 3) StartCoroutine(solve());
+			if (stage == 3) solve();
 			updateTopScreen();
 			yield break;
 		}
@@ -625,19 +488,19 @@ public class purpleBoxScript : MonoBehaviour
 			StartCoroutine(strike());
 		}
 		updateBottomScreen();
-		if (stage == 3) StartCoroutine(solve());
+		if (stage == 3) solve();
 		updateTopScreen();
 		lockInput = false;
 	}
 
 	void sidePress(bool input)
 	{
-		Audio.HandlePlaySoundAtTransform(tapSounds[Random.Range(0, tapSounds.Length)].name, transform);
+		Audio.HandlePlaySoundAtTransform(tapSounds.PickRandom().name, transform);
 		bitString += input?'1':'0';
 		checkBits();
 	}
 
-	void changeScale()
+	void changeScale() // а хули собсна не работает :(
 	{
 		bottomText.transform.localScale = bottomTextScale;
 		Bounds textBounds = bottomText.GetComponent<Renderer>().bounds;
@@ -660,14 +523,7 @@ public class purpleBoxScript : MonoBehaviour
 	{
 		if (stackString.Length>0) stackString = stackString.Substring(0, stackString.Length - 1);
 		updateBottomScreen();
-		if (timer == 0)
-		{
-			StartCoroutine(strike());
-		}
-		else
-		{
-			timer = 0;
-		}
+		if (timer == 0) StartCoroutine(strike()); else timer = 0;
 	}
 
 	IEnumerator strike()
@@ -675,7 +531,7 @@ public class purpleBoxScript : MonoBehaviour
 		if (tpAutoSolve)
 		{
 			GetComponent<KMBombModule>().HandlePass();
-			bottomText.GetComponent<TextMesh>().text = "<color=#ff0000>If you see this,\nreport this to rand06 IMMEDIATELY.</color>";
+			bottomText.GetComponent<TextMesh>().text = "<color=#ff0000>If you see this,\nreport this to rand06.</color>";
 			topText.GetComponent<TextMesh>().text = "<color=#ff0000>BUG!</color>";
 			ModuleSolved = true;
 			stage = 3;
@@ -702,15 +558,13 @@ public class purpleBoxScript : MonoBehaviour
 	IEnumerator highlightTop()
 	{
 		highlightTopBool = true;
-		int timer = 0;
-		while (timer < 30 && highlightTopBool)
+		int timer2 = 0;
+		while (timer2 < 30 && highlightTopBool)
 		{
-			timer++;
+			timer2++;
 			yield return new WaitForSeconds(.1f);
 		}
-
-		if (!highlightTopBool) 
-			yield break;
+		if (!highlightTopBool) yield break;
 		boxAwake = false;
 		updateBottomScreen();
 		updateFace(1);
@@ -725,10 +579,10 @@ public class purpleBoxScript : MonoBehaviour
 	IEnumerator turnOnSprites()
 	{
 		holdingStatus = true;
-		int timer = 0;
-		while (timer < 30 && holdingStatus)
+		int timer2 = 0;
+		while (timer2 < 30 && holdingStatus)
 		{
-			timer++;
+			timer2++;
 			yield return new WaitForSeconds(.1f);
 		}
 		if (!holdingStatus) yield break;
@@ -769,45 +623,45 @@ public class purpleBoxScript : MonoBehaviour
         updateTopScreen();
         if (Command.RegexMatch("^[01 ]+$"))
         {
-	        foreach (var c in Command)
-		        if (c != ' ')
+	        foreach (var c in Command.Where(c => c != ' '))
+	        {
+		        sidePress(c=='1');
+		        yield return new WaitForSeconds(.1f);
+	        }
+	        yield break;
+        }
+
+        switch (Command.ToLowerInvariant())
+        {
+	        case "hover":
+		        yield return new WaitForSeconds(3f);
+		        boxAwake = false;
+		        updateBottomScreen();
+		        updateFace(1);
+		        yield break;
+	        case "submit":
+		        yield return topPress();
+		        //topSide.OnInteract();
+		        if (TwitchShouldSolve)
 		        {
-			        sidePress(c=='1');
-			        yield return new WaitForSeconds(.1f);
+			        print("Solving the module via yield return solve...");
+			        yield return "solve";
+			        GetComponent<KMBombModule>().HandlePass();
 		        }
-	        yield break;
+		        else print("TwitchShouldSolve is false, proceeding...");
+		        yield break;
+	        case "clear":
+		        bottomSide.OnInteract();
+		        yield break;
+	        case "face":
+		        yield return new WaitForSeconds(3f);
+		        spritesTurnedOn = !spritesTurnedOn;
+		        updateFace();
+		        yield break;
+	        default:
+		        yield return "sendtochaterror Command is not valid.";
+		        break;
         }
-
-        if (Command.ToLowerInvariant() == "hover")
-        {
-	        yield return new WaitForSeconds(3f);
-	        boxAwake = false;
-	        updateBottomScreen();
-	        updateFace(1);
-	        yield break;
-        }
-
-        if (Command.ToLowerInvariant() == "submit")
-        {
-	        topSide.OnInteract();
-	        yield break;
-        }
-
-        if (Command.ToLowerInvariant() == "clear")
-        {
-	        bottomSide.OnInteract();
-	        yield break;
-        }
-
-        if (Command.ToLowerInvariant() == "face")
-        {
-	        yield return new WaitForSeconds(3f);
-	        spritesTurnedOn = !spritesTurnedOn;
-	        updateFace();
-	        yield break;
-        }
-
-        yield return "sendtochaterror Command is not valid.";
     }
 
     IEnumerator TwitchHandleForcedSolve()
@@ -841,5 +695,6 @@ public class purpleBoxScript : MonoBehaviour
 			yield return topPress();
 	        //while (lockInput) yield return new WaitForSeconds(.5f);
         }
+        GetComponent<KMBombModule>().HandlePass();
     }
 }
